@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Dungeon Master</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- RESUME SESSION MODAL -->
+  <div id="resume-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 class="modal-title">Resume Adventure?</h2>
+      <p id="resume-info" class="modal-body"></p>
+      <div class="modal-actions">
+        <button id="btn-resume" class="btn btn-gold">Resume</button>
+        <button id="btn-new-adventure" class="btn btn-outline">New Adventure</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-wide">
+      <h2 class="modal-title">Settings</h2>
+      <div class="settings-section">
+        <label class="settings-label" for="model-select-modal">Model</label>
+        <select id="model-select-modal" class="settings-select"></select>
+      </div>
+      <div class="settings-section">
+        <label class="settings-label" for="system-prompt-input">System Prompt</label>
+        <textarea id="system-prompt-input" class="settings-textarea" rows="10"></textarea>
+      </div>
+      <div class="settings-section settings-row">
+        <button id="btn-export" class="btn btn-outline">Export Session</button>
+        <button id="btn-clear-history" class="btn btn-danger">Clear History</button>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-settings-save" class="btn btn-gold">Save</button>
+        <button id="btn-settings-cancel" class="btn btn-outline">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header id="app-header">
+    <div class="header-left">
+      <button id="btn-toggle-log" class="icon-btn" title="Toggle Adventure Log">&#9776;</button>
+      <div class="header-title">
+        <span class="header-title-main">The Dungeon Master</span>
+        <span class="header-title-sub">powered by Ollama</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <select id="model-select-header" class="header-select" title="Active Model"></select>
+    </div>
+    <div class="header-right">
+      <div class="status-indicator" id="status-dot" title="Checking connection...">
+        <span class="status-dot-circle"></span>
+        <span class="status-dot-label">Ollama</span>
+      </div>
+      <button id="btn-settings" class="icon-btn" title="Settings">&#9881;</button>
+      <button id="btn-toggle-dice" class="icon-btn" title="Toggle Dice Roller">&#9878;</button>
+    </div>
+  </header>
+
+  <!-- MAIN LAYOUT -->
+  <div id="app-layout">
+
+    <!-- LEFT: Adventure Log -->
+    <aside id="adventure-log-panel" class="side-panel">
+      <div class="panel-header">
+        <span class="panel-title">Adventure Log</span>
+        <button id="btn-summarize" class="btn btn-sm" title="Summarize last 10 messages">Summarize</button>
+      </div>
+      <div id="adventure-log-entries" class="log-entries"></div>
+      <div class="log-input-row">
+        <input type="text" id="log-note-input" class="log-note-input" placeholder="Add a note…">
+        <button id="btn-add-note" class="btn btn-sm btn-gold">+</button>
+      </div>
+    </aside>
+
+    <!-- CENTER: Chat -->
+    <main id="chat-panel">
+      <div id="chat-window">
+        <!-- Messages rendered here by JS -->
+        <div id="chat-empty-state" class="chat-empty">
+          <div class="empty-icon">&#9760;</div>
+          <p class="empty-title">Your adventure awaits</p>
+          <p class="empty-sub">Describe your character or choose a prompt below to begin.</p>
+          <div class="quick-starts" id="quick-starts">
+            <button class="quick-chip">Let's play</button>
+            <button class="quick-chip">I want to be a Rogue</button>
+            <button class="quick-chip">I want to be a Wizard</button>
+            <button class="quick-chip">Set the scene</button>
+            <button class="quick-chip">What happens next?</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="input-area">
+        <div id="input-wrapper">
+          <textarea
+            id="chat-input"
+            placeholder="Speak your action…"
+            rows="1"
+            autocomplete="off"
+            spellcheck="true"
+          ></textarea>
+          <button id="btn-send" title="Send (Enter)">
+            <span class="send-icon">&#10148;</span>
+          </button>
+        </div>
+        <div id="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</div>
+      </div>
+    </main>
+
+    <!-- RIGHT: Dice Roller -->
+    <aside id="dice-panel" class="side-panel">
+      <div class="panel-header">
+        <span class="panel-title">Dice Roller</span>
+      </div>
+
+      <div id="dice-result-display" class="dice-result-display">
+        <span id="dice-result-value" class="dice-result-value">—</span>
+        <span id="dice-result-notation" class="dice-result-notation"></span>
+        <span id="dice-result-breakdown" class="dice-result-breakdown"></span>
+      </div>
+
+      <div class="dice-buttons-grid">
+        <button class="dice-btn" data-dice="d4">d4</button>
+        <button class="dice-btn" data-dice="d6">d6</button>
+        <button class="dice-btn" data-dice="d8">d8</button>
+        <button class="dice-btn" data-dice="d10">d10</button>
+        <button class="dice-btn" data-dice="d12">d12</button>
+        <button class="dice-btn dice-btn-d20" data-dice="d20">d20</button>
+        <button class="dice-btn" data-dice="d100">d100</button>
+      </div>
+
+      <div class="dice-custom-row">
+        <input type="text" id="dice-custom-input" class="dice-custom-input" placeholder="e.g. 2d6+3">
+        <button id="btn-roll-custom" class="btn btn-sm btn-gold">Roll</button>
+      </div>
+
+      <div class="dice-history-header">Recent Rolls</div>
+      <div id="dice-history" class="dice-history"></div>
+    </aside>
+
+  </div><!-- /#app-layout -->
+
+  <script src="app.js"></script>
+</body>
+</html>
