@@ -1,157 +1,1001 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Dungeon Master</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D&D 5e Simulator</title>
+<style>
+  /* ── Reset & Base ──────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0e0c0a;
+    --surface:  #1a1713;
+    --border:   #3a3020;
+    --gold:     #c9993a;
+    --gold-dim: #8a6a20;
+    --red:      #c94040;
+    --green:    #5a9a5a;
+    --blue:     #5a7aaa;
+    --text:     #d4c4a0;
+    --text-dim: #8a7a60;
+    --dm-bg:    #1e1a12;
+    --player-bg:#141210;
+    --scroll:   #2a2218;
+  }
+
+  body {
+    font-family: 'Georgia', serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ─────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 1.2rem;
+    color: var(--gold);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  header .header-actions { display: flex; gap: 10px; }
+
+  /* ── Main Layout ─────────────────────────────────────── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Chat Panel ──────────────────────────────────────── */
+  .chat-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+
+  /* Scrollbar */
+  #log::-webkit-scrollbar { width: 6px; }
+  #log::-webkit-scrollbar-track { background: var(--bg); }
+  #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 820px;
+  }
+  .msg-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+  .msg-body {
+    padding: 12px 16px;
+    border-radius: 4px;
+    line-height: 1.65;
+    font-size: 0.95rem;
+  }
+
+  .msg.dm .msg-label { color: var(--gold-dim); }
+  .msg.dm .msg-body {
+    background: var(--dm-bg);
+    border-left: 3px solid var(--gold-dim);
+    color: var(--text);
+  }
+
+  .msg.player .msg-label { color: var(--text-dim); align-self: flex-end; }
+  .msg.player { align-items: flex-end; }
+  .msg.player .msg-body {
+    background: var(--player-bg);
+    border-right: 3px solid var(--text-dim);
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .msg.system .msg-body {
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    font-style: italic;
+    border-left: 3px solid var(--border);
+    padding: 6px 12px;
+  }
+
+  .msg.alert .msg-body {
+    background: rgba(201,64,64,0.08);
+    border-left: 3px solid var(--red);
+    color: #e08080;
+    font-size: 0.85rem;
+  }
+
+  .msg.success .msg-body {
+    background: rgba(90,154,90,0.08);
+    border-left: 3px solid var(--green);
+    color: #80c080;
+    font-size: 0.85rem;
+  }
+
+  /* ── Input Area ──────────────────────────────────────── */
+  .input-area {
+    padding: 14px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  #action-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 10px 14px;
+    resize: none;
+    height: 46px;
+    line-height: 1.4;
+    transition: border-color 0.2s;
+  }
+  #action-input:focus { outline: none; border-color: var(--gold-dim); }
+  #action-input::placeholder { color: var(--text-dim); }
+  #action-input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  button {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: border-color 0.2s, color 0.2s;
+    white-space: nowrap;
+  }
+  button:hover { border-color: var(--gold-dim); color: var(--gold); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  button.primary {
+    background: #2a2010;
+    border-color: var(--gold-dim);
+    color: var(--gold);
+  }
+  button.primary:hover { background: #3a3018; }
+  button.danger { border-color: #6a3030; color: #c07070; }
+  button.danger:hover { border-color: var(--red); color: var(--red); }
+
+  #send-btn { min-width: 80px; }
+
+  /* ── Sidebar ─────────────────────────────────────────── */
+  .sidebar {
+    width: 280px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .sidebar-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-section h3 {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--gold-dim);
+    margin-bottom: 10px;
+  }
+
+  .char-name {
+    font-size: 1rem;
+    color: var(--gold);
+    margin-bottom: 2px;
+  }
+  .char-sub {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  /* HP bar */
+  .hp-bar-wrap { margin: 8px 0 4px; }
+  .hp-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .hp-bar {
+    height: 8px;
+    background: #2a1818;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .hp-bar-fill {
+    height: 100%;
+    background: var(--red);
+    border-radius: 4px;
+    transition: width 0.4s;
+  }
+
+  /* XP bar */
+  .xp-bar-wrap { margin: 6px 0 2px; }
+  .xp-bar {
+    height: 4px;
+    background: #1a1a2a;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .xp-bar-fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 2px;
+    transition: width 0.4s;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    padding: 3px 0;
+    color: var(--text-dim);
+  }
+  .stat-row span:last-child { color: var(--text); }
+
+  .condition-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .condition-tag {
+    background: rgba(201,64,64,0.15);
+    border: 1px solid #6a3030;
+    color: #c08080;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+  }
+
+  /* Combat */
+  .combat-banner {
+    background: rgba(201,64,64,0.1);
+    border: 1px solid #6a3030;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin: 4px 0;
+    font-size: 0.78rem;
+    color: #e08080;
+  }
+  .enemy-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    padding: 2px 0;
+  }
+  .enemy-row span:first-child { color: var(--text-dim); }
+
+  /* Inventory */
+  .inv-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .inv-list li {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    padding: 2px 0;
+  }
+
+  /* Spell slots */
+  .slot-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    padding: 3px 0;
+  }
+  .slot-pips { display: flex; gap: 3px; }
+  .pip {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 1px solid var(--gold-dim);
+  }
+  .pip.used { background: transparent; border-color: var(--border); }
+  .pip.full { background: var(--gold-dim); }
+
+  /* Location badge */
+  .location {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  /* ── Loading indicator ───────────────────────────────── */
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-style: italic;
+  }
+  .dots span {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--gold-dim);
+    animation: bounce 1.2s infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-5px); opacity: 1; }
+  }
+
+  /* ── Roll Modal ──────────────────────────────────────── */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--gold-dim);
+    border-radius: 6px;
+    padding: 28px 32px;
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .modal h2 {
+    color: var(--gold);
+    font-size: 1rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .modal .roll-desc { color: var(--text); font-size: 0.9rem; line-height: 1.5; }
+  .modal .roll-dc { color: var(--text-dim); font-size: 0.82rem; }
+  .modal .roll-actions { display: flex; gap: 10px; flex-direction: column; }
+  .modal input[type="number"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1.1rem;
+    padding: 8px 12px;
+    border-radius: 4px;
+    width: 100%;
+    text-align: center;
+  }
+  .modal input[type="number"]:focus { outline: none; border-color: var(--gold-dim); }
+  .dice-display {
+    text-align: center;
+    font-size: 2.5rem;
+    padding: 16px 0 8px;
+    color: var(--gold);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s;
+  }
+  .dice-display:hover { transform: scale(1.1); }
+  .dice-display:active { transform: scale(0.95); }
+  .roll-result-num {
+    text-align: center;
+    font-size: 2rem;
+    color: var(--gold);
+    font-weight: bold;
+  }
+
+  /* ── Character Creation Modal ────────────────────────── */
+  .creation-modal .modal {
+    width: 480px;
+    max-width: 95vw;
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--gold-dim); }
+  .form-group input, .form-group select, .form-group textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 8px 12px;
+    border-radius: 4px;
+  }
+  .form-group select option { background: var(--bg); }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: var(--gold-dim);
+  }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .creation-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+
+  .hidden { display: none !important; }
+</style>
 </head>
 <body>
 
-  <!-- RESUME SESSION MODAL -->
-  <div id="resume-modal" class="modal-overlay hidden">
-    <div class="modal-box">
-      <h2 class="modal-title">Resume Adventure?</h2>
-      <p id="resume-info" class="modal-body"></p>
-      <div class="modal-actions">
-        <button id="btn-resume" class="btn btn-gold">Resume</button>
-        <button id="btn-new-adventure" class="btn btn-outline">New Adventure</button>
-      </div>
+<!-- ── Header ── -->
+<header>
+  <h1>⚔ D&amp;D 5e Simulator</h1>
+  <div class="header-actions">
+    <button id="new-game-btn">New Game</button>
+    <button id="status-btn">Status</button>
+    <button id="inventory-btn">Inventory</button>
+  </div>
+</header>
+
+<!-- ── Layout ── -->
+<div class="layout">
+
+  <!-- Chat -->
+  <div class="chat-panel">
+    <div id="log"></div>
+    <div class="input-area">
+      <textarea id="action-input" placeholder="Describe your action…" rows="1" disabled></textarea>
+      <button id="send-btn" class="primary" disabled>Send</button>
     </div>
   </div>
 
-  <!-- SETTINGS MODAL -->
-  <div id="settings-modal" class="modal-overlay hidden">
-    <div class="modal-box modal-wide">
-      <h2 class="modal-title">Settings</h2>
-      <div class="settings-section">
-        <label class="settings-label" for="model-select-modal">Model</label>
-        <select id="model-select-modal" class="settings-select"></select>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section" id="char-section">
+      <h3>Character</h3>
+      <div class="char-name" id="char-name">—</div>
+      <div class="char-sub" id="char-sub">—</div>
+      <div class="hp-bar-wrap">
+        <div class="hp-bar-label">
+          <span>HP</span>
+          <span id="hp-text">—</span>
+        </div>
+        <div class="hp-bar"><div class="hp-bar-fill" id="hp-fill" style="width:100%"></div></div>
       </div>
-      <div class="settings-section">
-        <label class="settings-label" for="system-prompt-input">System Prompt</label>
-        <textarea id="system-prompt-input" class="settings-textarea" rows="10"></textarea>
+      <div class="xp-bar-wrap">
+        <div class="hp-bar-label">
+          <span>XP</span>
+          <span id="xp-text">—</span>
+        </div>
+        <div class="xp-bar"><div class="xp-bar-fill" id="xp-fill" style="width:0%"></div></div>
       </div>
-      <div class="settings-section settings-row">
-        <button id="btn-export" class="btn btn-outline">Export Session</button>
-        <button id="btn-clear-history" class="btn btn-danger">Clear History</button>
+      <div style="height:8px"></div>
+      <div class="stat-row"><span>AC</span><span id="stat-ac">—</span></div>
+      <div class="stat-row"><span>Gold</span><span id="stat-gold">—</span></div>
+      <div id="conditions-wrap" class="hidden">
+        <div class="condition-tags" id="conditions"></div>
       </div>
-      <div class="modal-actions">
-        <button id="btn-settings-save" class="btn btn-gold">Save</button>
-        <button id="btn-settings-cancel" class="btn btn-outline">Cancel</button>
-      </div>
+    </div>
+
+    <div class="sidebar-section" id="location-section">
+      <h3>Location</h3>
+      <div class="location" id="location-text">—</div>
+    </div>
+
+    <div class="sidebar-section hidden" id="combat-section">
+      <h3>Combat</h3>
+      <div class="combat-banner" id="combat-round"></div>
+      <div id="enemy-list"></div>
+    </div>
+
+    <div class="sidebar-section" id="spell-section" style="display:none">
+      <h3>Spell Slots</h3>
+      <div id="spell-slots"></div>
+    </div>
+
+    <div class="sidebar-section" id="inv-section">
+      <h3>Inventory</h3>
+      <ul class="inv-list" id="inv-list"></ul>
+    </div>
+  </aside>
+
+</div>
+
+<!-- ── Roll Modal ── -->
+<div class="modal-backdrop hidden" id="roll-modal">
+  <div class="modal">
+    <h2 id="roll-modal-title">Roll Required</h2>
+    <div class="roll-desc" id="roll-desc"></div>
+    <div class="roll-dc" id="roll-dc-line"></div>
+    <div class="dice-display" id="dice-icon" title="Click to roll">🎲</div>
+    <div class="roll-result-num hidden" id="roll-result-num"></div>
+    <div class="modal .roll-actions">
+      <input type="number" id="manual-roll" placeholder="Or enter a number…" min="1" max="30">
+      <button class="primary" id="submit-roll-btn">Confirm Roll</button>
     </div>
   </div>
+</div>
 
-  <!-- HEADER -->
-  <header id="app-header">
-    <div class="header-left">
-      <button id="btn-toggle-log" class="icon-btn" title="Toggle Adventure Log">&#9776;</button>
-      <div class="header-title">
-        <span class="header-title-main">The Dungeon Master</span>
-        <span class="header-title-sub">powered by Ollama</span>
+<!-- ── Character Creation Modal ── -->
+<div class="modal-backdrop hidden creation-modal" id="creation-modal">
+  <div class="modal">
+    <h2>Create Your Character</h2>
+    <div class="form-group">
+      <label>Character Name</label>
+      <input type="text" id="cc-name" placeholder="Adventurer" maxlength="40">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Race</label>
+        <select id="cc-race"></select>
+      </div>
+      <div class="form-group">
+        <label>Class</label>
+        <select id="cc-class"></select>
       </div>
     </div>
-    <div class="header-center">
-      <select id="model-select-header" class="header-select" title="Active Model"></select>
+    <div class="form-group">
+      <label>Backstory (optional)</label>
+      <textarea id="cc-backstory" rows="2" placeholder="A wandering adventurer…" maxlength="200"></textarea>
     </div>
-    <div class="header-right">
-      <div class="status-indicator" id="status-dot" title="Checking connection...">
-        <span class="status-dot-circle"></span>
-        <span class="status-dot-label">Ollama</span>
-      </div>
-      <button id="btn-settings" class="icon-btn" title="Settings">&#9881;</button>
-      <button id="btn-toggle-dice" class="icon-btn" title="Toggle Dice Roller">&#9878;</button>
+    <div class="creation-actions">
+      <button id="cancel-creation-btn" class="hidden">Cancel</button>
+      <button id="confirm-creation-btn" class="primary">Begin Adventure</button>
     </div>
-  </header>
+    <div id="creation-save-option" class="hidden" style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:8px;">A saved game was found. Load it instead?</div>
+      <button id="load-save-btn" style="width:100%">Resume Save</button>
+    </div>
+  </div>
+</div>
 
-  <!-- MAIN LAYOUT -->
-  <div id="app-layout">
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+let gameState = null;
+let pendingRoll = null; // { description, dc, dice_type, rules_context }
+let rolledValue = null;
+let rawD20 = null; // unmodified d20 face for nat 1/20 detection
 
-    <!-- LEFT: Adventure Log -->
-    <aside id="adventure-log-panel" class="side-panel">
-      <div class="panel-header">
-        <span class="panel-title">Adventure Log</span>
-        <button id="btn-summarize" class="btn btn-sm" title="Summarize last 10 messages">Summarize</button>
-      </div>
-      <div id="adventure-log-entries" class="log-entries"></div>
-      <div class="log-input-row">
-        <input type="text" id="log-note-input" class="log-note-input" placeholder="Add a note…">
-        <button id="btn-add-note" class="btn btn-sm btn-gold">+</button>
-      </div>
-    </aside>
+// ── Helpers ────────────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
 
-    <!-- CENTER: Chat -->
-    <main id="chat-panel">
-      <div id="chat-window">
-        <!-- Messages rendered here by JS -->
-        <div id="chat-empty-state" class="chat-empty">
-          <div class="empty-icon">&#9760;</div>
-          <p class="empty-title">Your adventure awaits</p>
-          <p class="empty-sub">Describe your character or choose a prompt below to begin.</p>
-          <div class="quick-starts" id="quick-starts">
-            <button class="quick-chip">Let's play</button>
-            <button class="quick-chip">I want to be a Rogue</button>
-            <button class="quick-chip">I want to be a Wizard</button>
-            <button class="quick-chip">Set the scene</button>
-            <button class="quick-chip">What happens next?</button>
-          </div>
-        </div>
-      </div>
+function addMsg(type, text, label) {
+  const log = el('log');
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'msg-label';
+    lbl.textContent = label;
+    div.appendChild(lbl);
+  }
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = text;
+  div.appendChild(body);
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
 
-      <div id="input-area">
-        <div id="input-wrapper">
-          <textarea
-            id="chat-input"
-            placeholder="Speak your action…"
-            rows="1"
-            autocomplete="off"
-            spellcheck="true"
-          ></textarea>
-          <button id="btn-send" title="Send (Enter)">
-            <span class="send-icon">&#10148;</span>
-          </button>
-        </div>
-        <div id="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</div>
-      </div>
-    </main>
+function addThinking() {
+  const log = el('log');
+  const div = document.createElement('div');
+  div.className = 'thinking';
+  div.id = 'thinking-indicator';
+  div.innerHTML = 'The DM is thinking <div class="dots"><span></span><span></span><span></span></div>';
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
 
-    <!-- RIGHT: Dice Roller -->
-    <aside id="dice-panel" class="side-panel">
-      <div class="panel-header">
-        <span class="panel-title">Dice Roller</span>
-      </div>
+function removeThinking() {
+  const t = el('thinking-indicator');
+  if (t) t.remove();
+}
 
-      <div id="dice-result-display" class="dice-result-display">
-        <span id="dice-result-value" class="dice-result-value">—</span>
-        <span id="dice-result-notation" class="dice-result-notation"></span>
-        <span id="dice-result-breakdown" class="dice-result-breakdown"></span>
-      </div>
+function setInputEnabled(enabled) {
+  el('action-input').disabled = !enabled;
+  el('send-btn').disabled = !enabled;
+  el('status-btn').disabled = !enabled;
+  el('inventory-btn').disabled = !enabled;
+}
 
-      <div class="dice-buttons-grid">
-        <button class="dice-btn" data-dice="d4">d4</button>
-        <button class="dice-btn" data-dice="d6">d6</button>
-        <button class="dice-btn" data-dice="d8">d8</button>
-        <button class="dice-btn" data-dice="d10">d10</button>
-        <button class="dice-btn" data-dice="d12">d12</button>
-        <button class="dice-btn dice-btn-d20" data-dice="d20">d20</button>
-        <button class="dice-btn" data-dice="d100">d100</button>
-      </div>
+// ── Sidebar update ─────────────────────────────────────────────────────
+function updateSidebar(state) {
+  if (!state) return;
+  gameState = state;
+  const p = state.player;
+  const w = state.world;
+  const c = state.combat;
 
-      <div class="dice-custom-row">
-        <input type="text" id="dice-custom-input" class="dice-custom-input" placeholder="e.g. 2d6+3">
-        <button id="btn-roll-custom" class="btn btn-sm btn-gold">Roll</button>
-      </div>
+  el('char-name').textContent = p.name;
+  el('char-sub').textContent = `${p.race} ${p.class} · Level ${p.level}`;
 
-      <div class="dice-history-header">Recent Rolls</div>
-      <div id="dice-history" class="dice-history"></div>
-    </aside>
+  const hpPct = Math.max(0, (p.hp.current / p.hp.max) * 100);
+  el('hp-text').textContent = `${p.hp.current} / ${p.hp.max}`;
+  el('hp-fill').style.width = hpPct + '%';
+  // Color based on health
+  el('hp-fill').style.background = hpPct > 60 ? '#5a9a5a' : hpPct > 25 ? '#c99a3a' : '#c94040';
 
-  </div><!-- /#app-layout -->
+  const xpPct = Math.min(100, (p.xp / p.xp_to_next) * 100);
+  el('xp-text').textContent = `${p.xp} / ${p.xp_to_next}`;
+  el('xp-fill').style.width = xpPct + '%';
 
-  <script src="app.js"></script>
+  el('stat-ac').textContent = p.ac;
+  el('stat-gold').textContent = `${p.gold} gp`;
+
+  // Conditions
+  const condWrap = el('conditions-wrap');
+  const condEl = el('conditions');
+  if (p.conditions && p.conditions.length > 0) {
+    condWrap.classList.remove('hidden');
+    condEl.innerHTML = p.conditions.map(c =>
+      `<span class="condition-tag">${c}</span>`
+    ).join('');
+  } else {
+    condWrap.classList.add('hidden');
+  }
+
+  // Location
+  el('location-text').textContent = w.location;
+
+  // Combat
+  const combatSec = el('combat-section');
+  if (c.active && c.enemies.length > 0) {
+    combatSec.classList.remove('hidden');
+    el('combat-round').textContent = `⚔ Round ${c.round}`;
+    el('enemy-list').innerHTML = c.enemies.map(e =>
+      `<div class="enemy-row"><span>${e.name}</span><span>HP ${e.hp ?? '?'} AC ${e.ac ?? '?'}</span></div>`
+    ).join('');
+  } else {
+    combatSec.classList.add('hidden');
+  }
+
+  // Spell slots
+  const spellSec = el('spell-section');
+  const slots = p.spell_slots;
+  if (slots && Object.keys(slots).length > 0) {
+    spellSec.style.display = '';
+    el('spell-slots').innerHTML = Object.entries(slots).map(([tier, data]) => {
+      const remaining = data.total - data.used;
+      const pips = Array.from({length: data.total}, (_, i) =>
+        `<div class="pip ${i < remaining ? 'full' : 'used'}"></div>`
+      ).join('');
+      return `<div class="slot-row"><span style="color:var(--text-dim)">${tier}</span><div class="slot-pips">${pips}</div><span style="color:var(--text);font-size:0.78rem">${remaining}/${data.total}</span></div>`;
+    }).join('');
+  } else {
+    spellSec.style.display = 'none';
+  }
+
+  // Inventory
+  el('inv-list').innerHTML = p.inventory.map(item =>
+    `<li>· ${item}</li>`
+  ).join('');
+}
+
+// ── API ────────────────────────────────────────────────────────────────
+async function api(path, method='GET', body=null) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({error: r.statusText}));
+    throw new Error(err.error || r.statusText);
+  }
+  return r.json();
+}
+
+// ── Send action ────────────────────────────────────────────────────────
+async function sendAction(text) {
+  if (!text || !gameState) return;
+  setInputEnabled(false);
+  addMsg('player', text, 'You');
+  el('action-input').value = '';
+
+  const cmd = text.trim().toLowerCase();
+
+  // Optimistic local commands
+  if (cmd === 'status' || cmd === 'inventory') {
+    addThinking();
+    try {
+      const data = await api('/api/action', 'POST', {action: text});
+      removeThinking();
+      if (data.state) updateSidebar(data.state);
+      if (cmd === 'status') {
+        const p = data.state.player;
+        addMsg('system',
+          `${p.name} — ${p.race} ${p.class} Lv.${p.level} | HP ${p.hp.current}/${p.hp.max} | AC ${p.ac} | XP ${p.xp}/${p.xp_to_next} | Gold ${p.gold} gp`,
+          null);
+      } else {
+        addMsg('system', data.state.player.inventory.join(', '), 'Inventory');
+      }
+    } catch(e) { removeThinking(); addMsg('alert', e.message); }
+    setInputEnabled(true);
+    return;
+  }
+
+  if (cmd.startsWith('roll ')) {
+    addThinking();
+    try {
+      const data = await api('/api/action', 'POST', {action: text});
+      removeThinking();
+      if (data.result) {
+        addMsg('system', `${data.result.notation.toUpperCase()}: ${data.result.total}  ${data.result.breakdown}`);
+      } else {
+        addMsg('alert', data.error || 'Unknown dice notation.');
+      }
+    } catch(e) { removeThinking(); addMsg('alert', e.message); }
+    setInputEnabled(true);
+    return;
+  }
+
+  // Full LLM action
+  addThinking();
+  try {
+    const data = await api('/api/action', 'POST', {action: text});
+    removeThinking();
+
+    if (data.error) { addMsg('alert', data.error); setInputEnabled(true); return; }
+
+    if (data.narrative) addMsg('dm', data.narrative, 'Dungeon Master');
+
+    if (data.messages && data.messages.length) {
+      const isAlert = data.messages.some(m => m.includes('damage') || m.includes('unconscious'));
+      addMsg(isAlert ? 'alert' : 'success', data.messages.join('\n'));
+    }
+
+    if (data.state) updateSidebar(data.state);
+
+    if (data.roll_request) {
+      showRollModal(data.roll_request, data.rules_context || '');
+      return; // keep input disabled until roll resolved
+    }
+
+    if (data.enemy_turn) showEnemyTurn(data.enemy_turn);
+    if (data.state) updateSidebar(data.state); // refresh HP after enemy attacks
+
+  } catch(e) { removeThinking(); addMsg('alert', e.message); }
+
+  setInputEnabled(true);
+  el('action-input').focus();
+}
+
+// ── Enemy turn display ─────────────────────────────────────────────────
+function showEnemyTurn(results) {
+  if (!results || results.length === 0) return;
+  const round = gameState?.combat?.round;
+  const header = round ? `Enemy Turn — Round ${round}` : 'Enemy Turn';
+  const lines = results.map(r => {
+    const rollStr = `d20(${r.nat})+${r.attack_bonus}=${r.total} vs AC ${r.player_ac}`;
+    if (r.crit) {
+      return `${r.name}: ${rollStr} → CRITICAL HIT! ${r.damage} damage ${r.damage_str} — HP ${r.player_hp}/${r.player_hp_max}`;
+    } else if (r.fumble) {
+      return `${r.name}: d20(1) → FUMBLE — automatic miss`;
+    } else if (r.hit) {
+      return `${r.name}: ${rollStr} → HIT — ${r.damage} damage ${r.damage_str} — HP ${r.player_hp}/${r.player_hp_max}`;
+    } else {
+      return `${r.name}: ${rollStr} → MISS`;
+    }
+  });
+  const hasHit = results.some(r => r.hit);
+  addMsg(hasHit ? 'alert' : 'system', lines.join('\n'), header);
+}
+
+// ── Roll Modal ─────────────────────────────────────────────────────────
+function showRollModal(req, rulesCtx) {
+  pendingRoll = { ...req, rules_context: rulesCtx };
+  rolledValue = null;
+  rawD20 = null;
+  el('roll-modal-title').textContent = `Roll ${req.type || 'd20'}`;
+  el('roll-desc').textContent = req.description || 'A roll is required.';
+  el('roll-dc-line').textContent = req.dc ? `DC ${req.dc}` : '';
+  el('dice-icon').textContent = diceEmoji(req.type);
+  el('roll-result-num').classList.add('hidden');
+  el('roll-result-num').textContent = '';
+  el('manual-roll').value = '';
+  el('roll-modal').classList.remove('hidden');
+}
+
+function diceEmoji(type) {
+  // Simple dice icon switcher
+  return '🎲';
+}
+
+el('dice-icon').addEventListener('click', () => {
+  if (!pendingRoll) return;
+  const type = pendingRoll.type || 'd20';
+  const m = type.match(/^(\d*)d(\d+)([+-]\d+)?$/i);
+  if (m) {
+    const count = parseInt(m[1] || '1');
+    const sides = parseInt(m[2]);
+    const mod = parseInt(m[3] || '0');
+    let total = mod;
+    rawD20 = null;
+    for (let i = 0; i < count; i++) {
+      const face = Math.ceil(Math.random() * sides);
+      total += face;
+      // Track the raw d20 face for nat 1/20 (only meaningful for a single d20)
+      if (count === 1 && sides === 20) rawD20 = face;
+    }
+    rolledValue = total;
+    const label = rawD20 === 20 ? `${total} ✦ CRIT!` : rawD20 === 1 ? `${total} ✗ NAT 1` : total;
+    el('roll-result-num').textContent = label;
+    el('roll-result-num').classList.remove('hidden');
+    el('manual-roll').value = '';
+  }
+});
+
+el('submit-roll-btn').addEventListener('click', async () => {
+  if (!pendingRoll) return;
+  const manualVal = el('manual-roll').value.trim();
+  const finalRoll = manualVal !== '' ? parseInt(manualVal) : rolledValue;
+  if (finalRoll == null || isNaN(finalRoll)) {
+    el('roll-desc').textContent = 'Click the dice to roll, or enter a number.';
+    return;
+  }
+
+  el('roll-modal').classList.add('hidden');
+
+  const isSuccess = !pendingRoll.dc || finalRoll >= pendingRoll.dc;
+  addMsg('system', `Rolled ${finalRoll}${pendingRoll.dc ? ` vs DC ${pendingRoll.dc} — ${isSuccess ? 'Success!' : 'Failure.'}` : ''}`);
+
+  addThinking();
+  try {
+    const data = await api('/api/roll-result', 'POST', {
+      roll_total: finalRoll,
+      raw_d20: manualVal !== '' ? null : rawD20,
+      description: pendingRoll.description,
+      dc: pendingRoll.dc,
+      damage_dice: pendingRoll.damage_dice || null,
+      rules_context: pendingRoll.rules_context,
+    });
+    removeThinking();
+
+    if (data.narrative) addMsg('dm', data.narrative, 'Dungeon Master');
+    if (data.messages && data.messages.length) {
+      const isAlert = data.messages.some(m => m.includes('damage') || m.includes('unconscious'));
+      addMsg(isAlert ? 'alert' : 'success', data.messages.join('\n'));
+    }
+    if (data.enemy_turn) showEnemyTurn(data.enemy_turn);
+    if (data.state) updateSidebar(data.state);
+  } catch(e) { removeThinking(); addMsg('alert', e.message); }
+
+  pendingRoll = null;
+  rolledValue = null;
+  rawD20 = null;
+  setInputEnabled(true);
+  el('action-input').focus();
+});
+
+// ── Character Creation ─────────────────────────────────────────────────
+function populateCreationForm(races, classes) {
+  const raceEl = el('cc-race');
+  const classEl = el('cc-class');
+  raceEl.innerHTML = races.map(r => `<option>${r}</option>`).join('');
+  classEl.innerHTML = classes.map(c => `<option>${c}</option>`).join('');
+}
+
+function showCreation(hasSave, races, classes) {
+  populateCreationForm(races, classes);
+  if (hasSave) {
+    el('creation-save-option').classList.remove('hidden');
+    el('cancel-creation-btn').classList.remove('hidden');
+  } else {
+    el('creation-save-option').classList.add('hidden');
+    el('cancel-creation-btn').classList.add('hidden');
+  }
+  el('creation-modal').classList.remove('hidden');
+}
+
+el('load-save-btn').addEventListener('click', async () => {
+  el('creation-modal').classList.add('hidden');
+  try {
+    const data = await api('/api/load', 'POST');
+    updateSidebar(data.state);
+    addMsg('system', `Welcome back, ${data.state.player.name}.`);
+    setInputEnabled(true);
+    el('action-input').focus();
+  } catch(e) { addMsg('alert', e.message); }
+});
+
+el('confirm-creation-btn').addEventListener('click', async () => {
+  const name = el('cc-name').value.trim() || 'Adventurer';
+  const race = el('cc-race').value;
+  const cls  = el('cc-class').value;
+  const backstory = el('cc-backstory').value.trim();
+
+  el('creation-modal').classList.add('hidden');
+  addMsg('system', `Creating ${name} the ${race} ${cls}…`);
+  addThinking();
+
+  try {
+    const data = await api('/api/new-character', 'POST', {name, race, class: cls, backstory});
+    removeThinking();
+    updateSidebar(data.state);
+    if (data.narrative) addMsg('dm', data.narrative, 'Dungeon Master');
+    setInputEnabled(true);
+    el('action-input').focus();
+  } catch(e) { removeThinking(); addMsg('alert', e.message); }
+});
+
+el('cancel-creation-btn').addEventListener('click', () => {
+  el('creation-modal').classList.add('hidden');
+});
+
+el('new-game-btn').addEventListener('click', async () => {
+  if (!confirm('Start a new game? Your current save will be deleted.')) return;
+  try {
+    await api('/api/save', 'DELETE');
+    const data = await api('/api/state');
+    showCreation(false, data.races, data.classes);
+  } catch(e) { addMsg('alert', e.message); }
+});
+
+// ── Input handling ─────────────────────────────────────────────────────
+el('send-btn').addEventListener('click', () => {
+  sendAction(el('action-input').value.trim());
+});
+
+el('action-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendAction(el('action-input').value.trim());
+  }
+});
+
+el('status-btn').addEventListener('click', () => sendAction('status'));
+el('inventory-btn').addEventListener('click', () => sendAction('inventory'));
+
+// ── Init ───────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const data = await api('/api/state');
+    if (data.has_save) {
+      updateSidebar(data.state);
+      addMsg('system', `Welcome back, ${data.state.player.name}. Your adventure continues.`);
+      // Show history hint
+      if (data.state.history && data.state.history.length > 0) {
+        const last = data.state.history[data.state.history.length - 1];
+        if (last.speaker === 'DM') addMsg('dm', last.text, 'Dungeon Master (last session)');
+      }
+      setInputEnabled(true);
+      el('action-input').focus();
+    } else {
+      showCreation(false, data.races, data.classes);
+    }
+  } catch(e) {
+    addMsg('alert', 'Could not connect to server: ' + e.message);
+  }
+}
+
+init();
+</script>
 </body>
 </html>

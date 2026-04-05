@@ -2,42 +2,64 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Overview
+
+A D&D 5e simulator with two interfaces:
+- **CLI** (`main.py`) — terminal-based interactive loop
+- **Web** (`server.py`) — Flask API + single-page app (`index.html`)
+
+Both use the same three subsystems: `engine.py`, `llm_client.py`, and `rag.py`.
+
 ## Running the App
 
-No build step. Serve the files with Python's built-in HTTP server:
+**Prerequisites:** Ollama must be running locally on port 11434 with a model available. The default model name is `dnd-dm` (defined via `Modelfile`). The client auto-falls back to any available model if `dnd-dm` is missing.
 
 ```bash
-cd /Users/drew/repos/DnD && python3 -m http.server 8080
-```
+# Install dependencies
+pip install -r requirements.txt   # requests, chromadb, flask
 
-Then open http://localhost:8080 in a browser. Ollama must be running (`ollama serve`).
+# Create the custom Ollama model (one-time)
+ollama create dnd-dm -f Modelfile
 
-## Rebuilding the Ollama Model
+# Start web server (serves index.html at http://localhost:5000)
+python server.py
 
-After editing `Modelfile`:
-
-```bash
-ollama rm dnd && ollama create dnd -f /Users/drew/repos/DnD/Modelfile
+# Or run CLI
+python main.py
 ```
 
 ## Architecture
 
-Three files, no framework, no build toolchain:
+The key design principle is **separation of concerns**:
 
-- **`index.html`** — Static shell. Three-panel CSS Grid layout: adventure log (left), chat (center), dice roller (right). All IDs referenced by `app.js` are defined here.
-- **`style.css`** — Dark fantasy theme via CSS custom properties on `:root`. All colors, fonts (Cinzel + Crimson Text via Google Fonts), and animations are defined here.
-- **`app.js`** — All application logic. Single `state` object holds messages, model, system prompt, adventure log, and dice history. No modules or imports.
+- **LLM (`llm_client.py`)** = Narrator only. It receives a structured prompt with game state and returns a JSON response with `narrative` (prose) and `state_changes` (mechanical deltas). The LLM never calculates numbers or applies changes itself.
+- **Engine (`engine.py`)** = Rules enforcer. Owns all state mutations: HP, XP, gold, inventory, conditions, spell slots, level-ups, combat rounds, rests. The `apply_changes()` method consumes the LLM's `state_changes` dict and returns human-readable messages.
+- **RAG (`rag.py`)** = Rules lookup. Retrieves relevant SRD rule snippets for each player action and injects them into the LLM prompt. Uses ChromaDB + sentence-transformers when installed; falls back to keyword scoring.
+- **State** = a single JSON dict (schema in `engine.py:build_new_character`) persisted to `game_state.json`.
 
-## Key app.js Patterns
+### LLM Response Schema
 
-**Ollama streaming** — `streamFromOllama()` uses `fetch` with `stream: true` against `http://localhost:11434/api/chat`. Responses are newline-delimited JSON; a `buffer` string accumulates partial chunks across `reader.read()` calls. When Ollama returns `done_reason: "load"` (model cold-starting), the function retries automatically.
+Every LLM call returns JSON with three top-level keys (defined in `llm_client.py:_SCHEMA`):
+- `narrative` — all prose
+- `state_changes` — mechanical deltas the engine applies
+- `requires_player_roll` — signals the client to prompt for a dice roll
 
-**Message flow** — `sendMessage()` pushes to `state.messages`, renders the player bubble, then calls `streamFromOllama(state.messages)`. The system prompt is prepended only if `state.systemPrompt` is non-empty — the `Modelfile` is the primary source for the system prompt; `state.systemPrompt` is an optional runtime override.
+### Combat Flow (Web)
 
-**Session persistence** — Full `state` (messages, adventure log, system prompt, model) is serialized to `localStorage` under key `dnd-session-v1` after every message. On load, if a saved session exists, a resume modal is shown.
+1. Player sends action → `POST /api/action`
+2. Server calls LLM, which returns `requires_player_roll` if an attack/check is needed
+3. If a roll is pending, enemy turn is **deferred**
+4. Client rolls dice and sends result → `POST /api/roll-result`
+5. Server applies player damage directly (does not trust LLM to do it), then runs enemy turn via `engine.enemy_attacks()`
+6. Enemy turn results are returned in `enemy_turn[]` for the client to display
 
-**Model preference order** — On startup, `fetchModels()` calls `/api/tags` and selects the first match from `['dnd:latest', 'dolphin-mistral:latest']`, falling back to whatever is available.
+### Key Design Decisions
 
-## Modelfile
+- **Player damage is applied server-side** in `roll_result()`, not by the LLM. After applying damage, the narrative prompt explicitly tells the LLM "damage already applied — do NOT set enemy_hp_deltas."
+- **`_infer_roll_request()`** in `server.py` is a fallback for when the LLM forgets to request an attack roll during combat — it detects attack verbs and synthesizes a roll request.
+- **History is capped at 20 entries** (`add_history` in `engine.py`); only the last 8 entries are sent to the LLM prompt.
+- **`api.py`** is an earlier prototype/scratch file; the active implementation is `server.py` + `llm_client.py`.
 
-`FROM dolphin-mistral` base with temperature 0.85, repeat_penalty 1.1, num_ctx 8192. The `SYSTEM` block enforces DM-only role, mandatory dice roll sequences, and D&D 5e mechanics. The system prompt is the primary lever for fixing gameplay behavior — prompt changes require `ollama rm dnd && ollama create dnd -f Modelfile`.
+## No Tests
+
+There is no test suite. `api.py` at the repo root is a standalone prototype script, not a test file.
