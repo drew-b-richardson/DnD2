@@ -452,10 +452,15 @@
   .hidden { display: none !important; }
 
   /* ── Illustration Modal ──────────────────────────────── */
-  .illus-modal .modal { width: 540px; max-width: 95vw; }
+  .illus-modal .modal {
+    width: 540px;
+    max-width: 95vw;
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
   .illus-img-wrap {
     width: 100%;
-    aspect-ratio: 1;
+    height: min(480px, 60dvh);
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -1105,10 +1110,15 @@ function _pollIllustration(jobId) {
   }, 2000);
 }
 
-el('illus-close-btn').addEventListener('click', () => {
+function _closeIllustModal() {
   el('illus-modal').classList.add('hidden');
   if (illustPollTimer) { clearInterval(illustPollTimer); illustPollTimer = null; }
   _illustDone();
+}
+
+el('illus-close-btn').addEventListener('click', _closeIllustModal);
+el('illus-modal').addEventListener('click', e => {
+  if (e.target === el('illus-modal')) _closeIllustModal();
 });
 
 // ── TTS ────────────────────────────────────────────────────────────────
