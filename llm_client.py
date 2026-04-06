@@ -150,6 +150,45 @@ class OllamaClient:
             print(f"\n  [Unexpected error: {e}]")
         return None
 
+    def summarize_history(self, entries: list) -> str | None:
+        """Condense a list of history entries into a plain-text summary paragraph."""
+        lines = []
+        for e in entries:
+            speaker = e["speaker"]
+            text = e["text"][:600]
+            lines.append(f"{speaker}: {text}")
+
+        prompt = (
+            "You are summarizing a D&D 5e adventure log for use as persistent memory. "
+            "Condense the following history into a single focused paragraph. "
+            "Preserve: active quest objectives, important NPCs and companions met, "
+            "significant decisions made, notable items acquired, past combat outcomes, "
+            "and the current situation. Be specific — include names, places, and outcomes. "
+            "Plain prose only, no lists, no JSON.\n\n"
+            + "\n".join(lines)
+            + "\n\nSummary:"
+        )
+
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": 0.3, "top_p": 0.9},
+        }
+
+        try:
+            resp = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=120,
+            )
+            resp.raise_for_status()
+            text = resp.json().get("response", "").strip()
+            return text or None
+        except Exception as e:
+            print(f"\n  [History summarization failed: {e}]")
+            return None
+
     # ------------------------------------------------------------------
     # Prompt construction
     # ------------------------------------------------------------------
@@ -190,11 +229,17 @@ class OllamaClient:
         if rules_context:
             lines += ["", "=== RELEVANT RULES ===", rules_context]
 
-        history = state.get("history", [])[-8:]
-        if history:
-            lines.append("\n=== RECENT HISTORY ===")
-            for h in history:
-                lines.append(f"{h['speaker']}: {h['text'][:300]}")
+        history = state.get("history", [])
+        summaries = [h for h in history if h["speaker"] == "Summary"]
+        recent = [h for h in history if h["speaker"] != "Summary"][-6:]
+        display = summaries + recent
+        if display:
+            lines.append("\n=== ADVENTURE HISTORY ===")
+            for h in display:
+                if h["speaker"] == "Summary":
+                    lines.append(f"[Adventure so far]: {h['text']}")
+                else:
+                    lines.append(f"{h['speaker']}: {h['text'][:300]}")
 
         lines += ["", "=== PLAYER ACTION ===", player_action, "", "Respond with JSON only:"]
         return "\n".join(lines)

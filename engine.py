@@ -361,10 +361,16 @@ class GameEngine:
     # History and persistence
     # ------------------------------------------------------------------
 
-    def add_history(self, speaker: str, text: str, max_entries=20):
+    def add_history(self, speaker: str, text: str):
         self.state["history"].append({"speaker": speaker, "text": text})
-        if len(self.state["history"]) > max_entries:
-            self.state["history"] = self.state["history"][-max_entries:]
+
+    def needs_summarization(self, threshold: int = 20) -> bool:
+        return len(self.state["history"]) >= threshold
+
+    def apply_summary(self, summary: str, keep_last: int = 6):
+        """Replace all but the most recent entries with a single summary entry."""
+        recent = self.state["history"][-keep_last:]
+        self.state["history"] = [{"speaker": "Summary", "text": summary}] + recent
 
     def save(self, filepath: str):
         with open(filepath, "w") as f:

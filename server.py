@@ -73,6 +73,20 @@ def _extract_target(desc: str, state: dict) -> str:
     return ""
 
 
+def _maybe_summarize(eng: GameEngine) -> None:
+    """If history has hit the limit, ask the LLM to condense older entries."""
+    if not eng.needs_summarization(threshold=20):
+        return
+    to_summarize = eng.state["history"][:-6]
+    if not to_summarize:
+        return
+    print(f"  [Summarizing {len(to_summarize)} history entries…]")
+    summary = llm.summarize_history(to_summarize)
+    if summary:
+        eng.apply_summary(summary, keep_last=6)
+        print("  [History condensed into summary.]")
+
+
 def _run_enemy_turn(eng: GameEngine) -> list:
     """Run enemy attacks and return structured results for the client."""
     return eng.enemy_attacks()
@@ -176,6 +190,7 @@ def new_character():
         narrative = response.get("narrative", "")
         engine.apply_changes(response.get("state_changes", {}))
         engine.add_history("DM", narrative)
+        _maybe_summarize(engine)
         engine.save(SAVE_FILE)
 
     return jsonify({"state": state, "narrative": narrative})
@@ -249,6 +264,7 @@ def action():
 
     engine.add_history("Player", raw)
     engine.add_history("DM", narrative)
+    _maybe_summarize(engine)
 
     # Run enemy attacks at end of player turn (only when no roll is pending)
     enemy_turn = []
@@ -333,6 +349,7 @@ def roll_result():
     msgs = engine.apply_changes(changes)
     msgs = hit_msgs + msgs
     engine.add_history("DM", narrative)
+    _maybe_summarize(engine)
 
     # Run enemy attacks after player's full turn (action + roll) is resolved
     enemy_turn = []
