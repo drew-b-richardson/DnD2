@@ -25,8 +25,9 @@ class ImageGenerator:
         device = "mps" if torch.backends.mps.is_available() else (
             "cuda" if torch.cuda.is_available() else "cpu"
         )
-        dtype = torch.float16 if device in ("mps", "cuda") else torch.float32
-        variant = "fp16" if device in ("mps", "cuda") else None
+        # MPS + float16 produces black images — use float32 on Apple Silicon
+        dtype = torch.float16 if device == "cuda" else torch.float32
+        variant = "fp16" if device == "cuda" else None
 
         print(f"  [Image gen: loading {self.MODEL_ID} on {device}…]")
         pipe = AutoPipelineForText2Image.from_pretrained(
