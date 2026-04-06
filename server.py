@@ -4,6 +4,9 @@ import io
 import json
 import os
 import re
+import threading
+import time
+import uuid
 import wave
 
 from flask import Flask, jsonify, request, send_file, Response
@@ -22,6 +25,20 @@ except Exception as _e:
     _tts_model = None
     TTS_AVAILABLE = False
     print(f"Kokoro TTS unavailable ({_e}). Install: pip install kokoro-onnx, then download model files.")
+
+# Optional image generation via diffusers
+try:
+    from image_gen import ImageGenerator as _ImageGenerator
+    _img_gen = _ImageGenerator()
+    IMG_GEN_AVAILABLE = True
+    print("Image generation ready (model loads on first use).")
+except Exception as _e:
+    _img_gen = None
+    IMG_GEN_AVAILABLE = False
+    print(f"Image generation unavailable ({_e}). Install: pip install torch diffusers transformers accelerate Pillow")
+
+_img_jobs: dict = {}        # job_id → {status, path, error, created}
+_img_jobs_lock = threading.Lock()
 
 SAVE_FILE = "game_state.json"
 
@@ -393,6 +410,77 @@ def _text_to_wav(text: str, voice: str) -> bytes:
 @app.get("/api/tts/voices")
 def tts_voices():
     return jsonify({"available": TTS_AVAILABLE, "voices": TTS_VOICES})
+
+
+@app.get("/api/illustrate/status")
+def illustrate_status():
+    return jsonify({"available": IMG_GEN_AVAILABLE})
+
+
+@app.post("/api/illustrate")
+def illustrate():
+    if not IMG_GEN_AVAILABLE:
+        return jsonify({"error": "Image generation not available"}), 503
+    if state is None:
+        return jsonify({"error": "No active game"}), 400
+
+    # Check for an already-running job
+    with _img_jobs_lock:
+        in_flight = any(j["status"] == "pending" for j in _img_jobs.values())
+    if in_flight:
+        return jsonify({"error": "An illustration is already being generated"}), 409
+
+    state_snapshot = json.loads(json.dumps(state))
+    job_id = str(uuid.uuid4())
+
+    with _img_jobs_lock:
+        _img_jobs[job_id] = {"status": "pending", "path": None,
+                             "error": None, "created": time.time()}
+
+    def _run():
+        try:
+            prompt = llm.build_image_prompt(state_snapshot)
+            if not prompt:
+                raise RuntimeError("LLM returned an empty image prompt")
+            out_path = f"/tmp/dnd_illus_{job_id}.png"
+            _img_gen.generate(prompt, out_path)
+            with _img_jobs_lock:
+                _img_jobs[job_id]["status"] = "done"
+                _img_jobs[job_id]["path"] = out_path
+        except Exception as e:
+            print(f"  [Image generation error: {e}]")
+            with _img_jobs_lock:
+                _img_jobs[job_id]["status"] = "error"
+                _img_jobs[job_id]["error"] = str(e)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"job_id": job_id}), 202
+
+
+@app.get("/api/illustrate/image/<job_id>")
+def illustrate_image(job_id):
+    with _img_jobs_lock:
+        job = _img_jobs.get(job_id)
+    if not job or job["status"] != "done":
+        return jsonify({"error": "Image not ready"}), 404
+    path = job["path"]
+    with _img_jobs_lock:
+        _img_jobs.pop(job_id, None)
+    return send_file(path, mimetype="image/png")
+
+
+@app.get("/api/illustrate/<job_id>")
+def illustrate_poll(job_id):
+    with _img_jobs_lock:
+        job = _img_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Unknown job"}), 404
+    if job["status"] == "pending":
+        return jsonify({"status": "pending"})
+    if job["status"] == "error":
+        return jsonify({"status": "error", "error": job["error"]})
+    return jsonify({"status": "done",
+                    "image_url": f"/api/illustrate/image/{job_id}"})
 
 
 @app.post("/api/tts")

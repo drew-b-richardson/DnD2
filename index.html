@@ -450,6 +450,45 @@
   .creation-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
 
   .hidden { display: none !important; }
+
+  /* ── Illustration Modal ──────────────────────────────── */
+  .illus-modal .modal { width: 540px; max-width: 95vw; }
+  .illus-img-wrap {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .illus-img-wrap img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 0.6s;
+  }
+  .illus-img-wrap img.loaded { opacity: 1; }
+  .illus-shimmer {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, var(--surface) 25%, var(--border) 50%, var(--surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .illus-caption {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    font-style: italic;
+    text-align: center;
+    min-height: 1.2em;
+  }
 </style>
 </head>
 <body>
@@ -460,6 +499,7 @@
   <div class="header-actions">
     <select id="tts-voice" title="TTS Voice" style="background:var(--surface);border:1px solid var(--border);color:var(--text-dim);font-family:inherit;font-size:0.78rem;padding:4px 8px;border-radius:4px;display:none"></select>
     <button id="tts-btn" title="Toggle text-to-speech">🔇 TTS</button>
+    <button id="illustrate-btn" title="Generate scene illustration" disabled>Illustrate</button>
     <button id="new-game-btn">New Game</button>
     <button id="status-btn">Status</button>
     <button id="inventory-btn">Inventory</button>
@@ -545,6 +585,19 @@
   </div>
 </div>
 
+<!-- ── Illustration Modal ── -->
+<div class="modal-backdrop hidden illus-modal" id="illus-modal">
+  <div class="modal">
+    <h2>Scene Illustration</h2>
+    <div class="illus-img-wrap">
+      <div class="illus-shimmer" id="illus-shimmer"></div>
+      <img id="illus-img" alt="Scene illustration" />
+    </div>
+    <div class="illus-caption" id="illus-caption">Sketching the scene…</div>
+    <button id="illus-close-btn" style="width:100%;margin-top:4px">Close</button>
+  </div>
+</div>
+
 <!-- ── Character Creation Modal ── -->
 <div class="modal-backdrop hidden creation-modal" id="creation-modal">
   <div class="modal">
@@ -627,6 +680,7 @@ function setInputEnabled(enabled) {
   el('send-btn').disabled = !enabled;
   el('status-btn').disabled = !enabled;
   el('inventory-btn').disabled = !enabled;
+  if (illustAvailable) el('illustrate-btn').disabled = !enabled;
 }
 
 // ── Sidebar update ─────────────────────────────────────────────────────
@@ -975,6 +1029,84 @@ el('action-input').addEventListener('keydown', e => {
 el('status-btn').addEventListener('click', () => sendAction('status'));
 el('inventory-btn').addEventListener('click', () => sendAction('inventory'));
 
+// ── Illustration ───────────────────────────────────────────────────────
+let illustAvailable = false;
+let illustPollTimer = null;
+
+async function initIllustration() {
+  try {
+    const data = await api('/api/illustrate/status');
+    illustAvailable = data.available;
+    if (!illustAvailable) {
+      el('illustrate-btn').title = 'Illustration unavailable — install diffusers + torch';
+      el('illustrate-btn').style.opacity = '0.4';
+    }
+  } catch(_) {
+    el('illustrate-btn').style.opacity = '0.4';
+  }
+}
+
+el('illustrate-btn').addEventListener('click', async () => {
+  if (!illustAvailable || !gameState) return;
+  el('illustrate-btn').disabled = true;
+  el('illustrate-btn').textContent = 'Illustrating…';
+
+  // Open modal in loading state
+  el('illus-img').classList.remove('loaded');
+  el('illus-img').src = '';
+  el('illus-shimmer').style.display = '';
+  el('illus-caption').textContent = 'Sketching the scene…';
+  el('illus-modal').classList.remove('hidden');
+
+  try {
+    const data = await api('/api/illustrate', 'POST');
+    _pollIllustration(data.job_id);
+  } catch(e) {
+    el('illus-caption').textContent = 'Failed to start: ' + e.message;
+    _illustDone();
+  }
+});
+
+function _illustDone() {
+  el('illustrate-btn').textContent = 'Illustrate';
+  el('illustrate-btn').disabled = !gameState || !illustAvailable;
+}
+
+function _pollIllustration(jobId) {
+  illustPollTimer = setInterval(async () => {
+    try {
+      const data = await api(`/api/illustrate/${jobId}`);
+      if (data.status === 'pending') return;
+      clearInterval(illustPollTimer);
+      illustPollTimer = null;
+      if (data.status === 'done') {
+        const img = el('illus-img');
+        img.onload = () => {
+          el('illus-shimmer').style.display = 'none';
+          img.classList.add('loaded');
+          el('illus-caption').textContent = gameState?.world?.location || 'Current scene';
+        };
+        img.src = data.image_url;
+      } else {
+        el('illus-shimmer').style.display = 'none';
+        el('illus-caption').textContent = 'Error: ' + (data.error || 'unknown');
+      }
+    } catch(e) {
+      clearInterval(illustPollTimer);
+      illustPollTimer = null;
+      el('illus-shimmer').style.display = 'none';
+      el('illus-caption').textContent = 'Poll error: ' + e.message;
+    }
+    _illustDone();
+  }, 2000);
+}
+
+el('illus-close-btn').addEventListener('click', () => {
+  el('illus-modal').classList.add('hidden');
+  if (illustPollTimer) { clearInterval(illustPollTimer); illustPollTimer = null; }
+  _illustDone();
+});
+
 // ── TTS ────────────────────────────────────────────────────────────────
 let ttsEnabled = false;
 let ttsAvailable = false;
@@ -1036,6 +1168,7 @@ async function initTTS() {
 // ── Init ───────────────────────────────────────────────────────────────
 async function init() {
   initTTS();
+  initIllustration();
   try {
     const data = await api('/api/state');
     if (data.has_save) {

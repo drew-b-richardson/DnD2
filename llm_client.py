@@ -150,6 +150,49 @@ class OllamaClient:
             print(f"\n  [Unexpected error: {e}]")
         return None
 
+    def build_image_prompt(self, state: dict) -> str | None:
+        """Generate a Stable Diffusion prompt from the current game state.
+
+        Returns a short comma-separated tag string, or None on failure.
+        """
+        location = state["world"]["location"]
+        last_dm = next(
+            (h["text"] for h in reversed(state["history"]) if h["speaker"] == "DM"), ""
+        )
+        player = f"{state['player']['race']} {state['player']['class']}"
+        combat = state["combat"]
+        combat_line = ""
+        if combat["active"] and combat["enemies"]:
+            names = ", ".join(e["name"] for e in combat["enemies"])
+            combat_line = f"In combat with: {names}.\n"
+
+        prompt = (
+            "Write a Stable Diffusion image prompt for this D&D scene. "
+            "20-30 words, comma-separated visual tags. "
+            "Focus on: setting, lighting, characters present, action, atmosphere. "
+            "Do NOT include style words — those are added separately. "
+            "Output ONLY the tag list, no explanation.\n\n"
+            f"Location: {location}\n"
+            f"Character: {player}\n"
+            f"{combat_line}"
+            f"Scene: {last_dm[:400]}"
+        )
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": 0.3, "top_p": 0.9},
+        }
+        try:
+            resp = requests.post(
+                f"{self.base_url}/api/generate", json=payload, timeout=60
+            )
+            resp.raise_for_status()
+            return resp.json().get("response", "").strip() or None
+        except Exception as e:
+            print(f"\n  [Image prompt generation failed: {e}]")
+            return None
+
     def summarize_history(self, entries: list) -> str | None:
         """Condense a list of history entries into a plain-text summary paragraph."""
         lines = []
