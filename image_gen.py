@@ -1,10 +1,12 @@
-"""Local image generation using diffusers + Stable Diffusion XL Turbo."""
+"""Local image generation using diffusers + Stable Diffusion v1.5.
 
-import io
+Uses SD v1.5 (~4 GB at float32) rather than SDXL-Turbo (~13 GB) so it can
+coexist with a running Ollama model on Apple Silicon unified memory.
+"""
 
 
 class ImageGenerator:
-    MODEL_ID = "stabilityai/sdxl-turbo"
+    MODEL_ID = "runwayml/stable-diffusion-v1-5"
 
     _STYLE = (
         "pencil sketch, ink outline, black and white, fantasy line art, "
@@ -20,22 +22,28 @@ class ImageGenerator:
 
     def _load(self) -> None:
         import torch
-        from diffusers import AutoPipelineForText2Image
+        from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 
         device = "mps" if torch.backends.mps.is_available() else (
             "cuda" if torch.cuda.is_available() else "cpu"
         )
-        # MPS + float16 produces black images — use float32 on Apple Silicon
+        # Use float16 only on CUDA — MPS and CPU use float32 for stability
         dtype = torch.float16 if device == "cuda" else torch.float32
-        variant = "fp16" if device == "cuda" else None
 
         print(f"  [Image gen: loading {self.MODEL_ID} on {device}…]")
-        pipe = AutoPipelineForText2Image.from_pretrained(
+        pipe = StableDiffusionPipeline.from_pretrained(
             self.MODEL_ID,
             torch_dtype=dtype,
-            variant=variant,
+            safety_checker=None,
+            requires_safety_checker=False,
         ).to(device)
-        pipe.enable_attention_slicing()
+
+        # Faster scheduler — 20 steps instead of the default 50
+        pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+            pipe.scheduler.config
+        )
+        pipe.enable_attention_slicing()  # reduce peak RAM
+        pipe.enable_vae_slicing()        # reduce peak RAM further
         pipe.set_progress_bar_config(disable=True)
         self._pipe = pipe
         print(f"  [Image gen: model ready on {device}]")
@@ -51,8 +59,8 @@ class ImageGenerator:
         result = self._pipe(
             prompt=full_prompt,
             negative_prompt=self._NEGATIVE,
-            num_inference_steps=4,   # SDXL-Turbo optimal: 1-4 steps
-            guidance_scale=0.0,      # Turbo requires guidance_scale=0
+            num_inference_steps=20,
+            guidance_scale=7.5,
             width=512,
             height=512,
         )
