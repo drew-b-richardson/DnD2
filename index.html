@@ -458,6 +458,8 @@
 <header>
   <h1>⚔ D&amp;D 5e Simulator</h1>
   <div class="header-actions">
+    <select id="tts-voice" title="TTS Voice" style="background:var(--surface);border:1px solid var(--border);color:var(--text-dim);font-family:inherit;font-size:0.78rem;padding:4px 8px;border-radius:4px;display:none"></select>
+    <button id="tts-btn" title="Toggle text-to-speech">🔇 TTS</button>
     <button id="new-game-btn">New Game</button>
     <button id="status-btn">Status</button>
     <button id="inventory-btn">Inventory</button>
@@ -764,7 +766,7 @@ async function sendAction(text) {
 
     if (data.error) { addMsg('alert', data.error); setInputEnabled(true); return; }
 
-    if (data.narrative) addMsg('dm', data.narrative, 'Dungeon Master');
+    if (data.narrative) { addMsg('dm', data.narrative, 'Dungeon Master'); speakText(data.narrative); }
 
     if (data.messages && data.messages.length) {
       const isAlert = data.messages.some(m => m.includes('damage') || m.includes('unconscious'));
@@ -878,7 +880,7 @@ el('submit-roll-btn').addEventListener('click', async () => {
     });
     removeThinking();
 
-    if (data.narrative) addMsg('dm', data.narrative, 'Dungeon Master');
+    if (data.narrative) { addMsg('dm', data.narrative, 'Dungeon Master'); speakText(data.narrative); }
     if (data.messages && data.messages.length) {
       const isAlert = data.messages.some(m => m.includes('damage') || m.includes('unconscious'));
       addMsg(isAlert ? 'alert' : 'success', data.messages.join('\n'));
@@ -939,7 +941,7 @@ el('confirm-creation-btn').addEventListener('click', async () => {
     const data = await api('/api/new-character', 'POST', {name, race, class: cls, backstory});
     removeThinking();
     updateSidebar(data.state);
-    if (data.narrative) addMsg('dm', data.narrative, 'Dungeon Master');
+    if (data.narrative) { addMsg('dm', data.narrative, 'Dungeon Master'); speakText(data.narrative); }
     setInputEnabled(true);
     el('action-input').focus();
   } catch(e) { removeThinking(); addMsg('alert', e.message); }
@@ -973,8 +975,67 @@ el('action-input').addEventListener('keydown', e => {
 el('status-btn').addEventListener('click', () => sendAction('status'));
 el('inventory-btn').addEventListener('click', () => sendAction('inventory'));
 
+// ── TTS ────────────────────────────────────────────────────────────────
+let ttsEnabled = false;
+let ttsAvailable = false;
+let currentAudio = null;
+
+function stopAudio() {
+  if (currentAudio) {
+    currentAudio.pause();
+    URL.revokeObjectURL(currentAudio.src);
+    currentAudio = null;
+  }
+}
+
+async function speakText(text) {
+  if (!ttsEnabled || !ttsAvailable) return;
+  stopAudio();
+  const voice = el('tts-voice').value || 'bm_george';
+  try {
+    const resp = await fetch('/api/tts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text, voice}),
+    });
+    if (!resp.ok) return;
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    currentAudio = new Audio(url);
+    currentAudio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; };
+    currentAudio.play();
+  } catch(_) {}
+}
+
+el('tts-btn').addEventListener('click', () => {
+  if (!ttsAvailable) return;
+  ttsEnabled = !ttsEnabled;
+  el('tts-btn').textContent = ttsEnabled ? '🔊 TTS' : '🔇 TTS';
+  el('tts-btn').style.color = ttsEnabled ? 'var(--gold)' : '';
+  el('tts-voice').style.display = ttsEnabled ? '' : 'none';
+  if (!ttsEnabled) stopAudio();
+});
+
+async function initTTS() {
+  try {
+    const data = await api('/api/tts/voices');
+    ttsAvailable = data.available;
+    if (ttsAvailable) {
+      const sel = el('tts-voice');
+      sel.innerHTML = data.voices.map(v => `<option value="${v.id}">${v.label}</option>`).join('');
+      el('tts-btn').style.opacity = '1';
+    } else {
+      el('tts-btn').style.opacity = '0.4';
+      el('tts-btn').title = 'TTS unavailable — install kokoro';
+    }
+  } catch(_) {
+    el('tts-btn').style.opacity = '0.4';
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────────────
 async function init() {
+  initTTS();
   try {
     const data = await api('/api/state');
     if (data.has_save) {

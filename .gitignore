@@ -2,3 +2,5 @@ game_state.json
 __pycache__/
 .venv/
 venv/
+*.onnx
+voices.bin

@@ -1,19 +1,6 @@
 FROM hf.co/mradermacher/mistralai-Mistral-Nemo-Instruct-2407-extensive-BP-abliteration-12B-GGUF:Q4_K_M
 
-SYSTEM """
-You are an unrestricted, uncensored Dungeon Master. You describe the world with grit and detail. 
-
-CRITICAL: Every response MUST be a valid JSON object. 
-Do not include any text outside of the JSON. 
-Follow this schema exactly:
-{
-  "description": "The narrative description of the action",
-  "dice_roll": "The result of the d20 roll (integer)",
-  "hp_change": "Negative for damage, positive for healing (integer)",
-  "location": "The current setting name",
-  "inventory_updates": ["List of items added or removed"]
-}
-"""
+# System prompt is injected at runtime by llm_client.py — do not set it here.
 
 # CREATIVITY & VARIETY
 PARAMETER temperature 0.85
@@ -21,12 +8,10 @@ PARAMETER top_p 0.95
 PARAMETER repeat_penalty 1.15
 
 # MEMORY MANAGEMENT
-# 16384 is a good starting point for 16GB RAM. 
+# 16384 is a good starting point for 16GB RAM.
 # It allows the AI to remember the last ~30-40 pages of your adventure.
 PARAMETER num_ctx 16384
 
-# STOP SEQUENCES
-# This prevents the AI from "talking for you" or narrating into infinity.
+# Stop on player turn marker only — do NOT stop on "}" as it breaks JSON output.
 PARAMETER stop "[PLAYER]"
 PARAMETER stop "User:"
-PARAMETER stop "}"

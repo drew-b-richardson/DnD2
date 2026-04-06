@@ -1,14 +1,27 @@
 """Web server — wraps the game engine in a Flask API."""
 
+import io
 import json
 import os
 import re
+import wave
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, Response
 
 from engine import GameEngine, build_new_character
 from llm_client import OllamaClient
 from rag import RulesRAG
+
+# Optional TTS support via kokoro-onnx
+try:
+    from kokoro_onnx import Kokoro as _Kokoro
+    _tts_model = _Kokoro("kokoro-v0_19.onnx", "voices.bin")
+    TTS_AVAILABLE = True
+    print("Kokoro TTS loaded.")
+except Exception as _e:
+    _tts_model = None
+    TTS_AVAILABLE = False
+    print(f"Kokoro TTS unavailable ({_e}). Install: pip install kokoro-onnx, then download model files.")
 
 SAVE_FILE = "game_state.json"
 
@@ -329,6 +342,59 @@ def roll_result():
     engine.save(SAVE_FILE)
 
     return jsonify({"narrative": narrative, "messages": msgs, "enemy_turn": enemy_turn, "state": state})
+
+
+# ---------------------------------------------------------------------------
+# TTS
+# ---------------------------------------------------------------------------
+
+TTS_VOICES = [
+    {"id": "bm_george",  "label": "George (British Male)",   "lang": "en-gb"},
+    {"id": "am_adam",    "label": "Adam (American Male)",    "lang": "en-us"},
+    {"id": "am_michael", "label": "Michael (American Male)", "lang": "en-us"},
+    {"id": "af_bella",   "label": "Bella (American Female)", "lang": "en-us"},
+    {"id": "af_heart",   "label": "Heart (American Female)", "lang": "en-us"},
+]
+
+_VOICE_LANG = {v["id"]: v["lang"] for v in TTS_VOICES}
+
+
+def _text_to_wav(text: str, voice: str) -> bytes:
+    """Synthesize text with kokoro-onnx and return WAV bytes."""
+    lang = _VOICE_LANG.get(voice, "en-us")
+    samples, sample_rate = _tts_model.create(text, voice=voice, speed=1.0, lang=lang)
+    audio_int16 = (samples * 32767).clip(-32768, 32767).astype('int16')
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(audio_int16.tobytes())
+    return buf.getvalue()
+
+
+@app.get("/api/tts/voices")
+def tts_voices():
+    return jsonify({"available": TTS_AVAILABLE, "voices": TTS_VOICES})
+
+
+@app.post("/api/tts")
+def tts():
+    if not TTS_AVAILABLE:
+        return jsonify({"error": "TTS not available"}), 503
+    data = request.json or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+    voice = data.get("voice", "bm_george")
+    valid_ids = {v["id"] for v in TTS_VOICES}
+    if voice not in valid_ids:
+        voice = "bm_george"
+    try:
+        wav_bytes = _text_to_wav(text, voice)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return Response(wav_bytes, mimetype="audio/wav")
 
 
 # ---------------------------------------------------------------------------
