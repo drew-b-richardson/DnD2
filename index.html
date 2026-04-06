@@ -1037,7 +1037,11 @@ async function initIllustration() {
   try {
     const data = await api('/api/illustrate/status');
     illustAvailable = data.available;
-    if (!illustAvailable) {
+    if (illustAvailable) {
+      // Enable now if a game is already active (handles reload mid-game and
+      // the race where setInputEnabled ran before this fetch resolved)
+      if (gameState) el('illustrate-btn').disabled = false;
+    } else {
       el('illustrate-btn').title = 'Illustration unavailable — install diffusers + torch';
       el('illustrate-btn').style.opacity = '0.4';
     }
