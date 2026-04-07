@@ -1093,7 +1093,7 @@ function _pollIllustration(jobId) {
         img.onload = () => {
           el('illus-shimmer').style.display = 'none';
           img.classList.add('loaded');
-          el('illus-caption').textContent = gameState?.world?.location || 'Current scene';
+          el('illus-caption').textContent = data.prompt || gameState?.world?.location || '';
         };
         img.src = data.image_url;
       } else {

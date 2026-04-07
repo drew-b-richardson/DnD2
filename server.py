@@ -435,7 +435,7 @@ def illustrate():
 
     with _img_jobs_lock:
         _img_jobs[job_id] = {"status": "pending", "path": None,
-                             "error": None, "created": time.time()}
+                             "prompt": None, "error": None, "created": time.time()}
 
     def _run():
         try:
@@ -451,6 +451,7 @@ def illustrate():
             with _img_jobs_lock:
                 _img_jobs[job_id]["status"] = "done"
                 _img_jobs[job_id]["path"] = out_path
+                _img_jobs[job_id]["prompt"] = prompt
         except Exception as e:
             print(f"  [Image generation error: {e}]")
             with _img_jobs_lock:
@@ -484,7 +485,8 @@ def illustrate_poll(job_id):
     if job["status"] == "error":
         return jsonify({"status": "error", "error": job["error"]})
     return jsonify({"status": "done",
-                    "image_url": f"/api/illustrate/image/{job_id}"})
+                    "image_url": f"/api/illustrate/image/{job_id}",
+                    "prompt": job.get("prompt", "")})
 
 
 @app.post("/api/tts")
