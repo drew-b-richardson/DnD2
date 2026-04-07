@@ -993,6 +993,7 @@ el('confirm-creation-btn').addEventListener('click', async () => {
   const backstory = el('cc-backstory').value.trim();
 
   el('creation-modal').classList.add('hidden');
+  el('log').innerHTML = '';
   addMsg('system', `Creating ${name} the ${race} ${cls}…`);
   addThinking();
 
