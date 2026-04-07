@@ -993,7 +993,6 @@ el('confirm-creation-btn').addEventListener('click', async () => {
   const backstory = el('cc-backstory').value.trim();
 
   el('creation-modal').classList.add('hidden');
-  el('log').innerHTML = '';
   addMsg('system', `Creating ${name} the ${race} ${cls}…`);
   addThinking();
 
@@ -1013,6 +1012,7 @@ el('cancel-creation-btn').addEventListener('click', () => {
 
 el('new-game-btn').addEventListener('click', async () => {
   if (!confirm('Start a new game? Your current save will be deleted.')) return;
+  el('log').innerHTML = '';
   try {
     await api('/api/save', 'DELETE');
     const data = await api('/api/state');
