@@ -592,13 +592,6 @@ _RULES = [
      "Potion of Healing: Use an action (or bonus action if a feature allows) to drink. "
      "Regain 2d4+2 HP. Greater Healing: 4d4+4. Superior: 8d4+8. Supreme: 10d4+20."),
 
-    ("short_rest", "short rest recover hit dice 1 hour",
-     "Short Rest: 1 hour of downtime. Spend hit dice to heal. Warlocks regain spell "
-     "slots. Some features recharge (Fighter Second Wind, Action Surge)."),
-
-    ("long_rest", "long rest full recovery 8 hours sleep",
-     "Long Rest: 8 hours. Regain all HP, all spell slots, half max hit dice. "
-     "Once per 24 hours. Interrupted by 1+ hour of strenuous activity."),
 ]
 
 
