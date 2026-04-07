@@ -583,10 +583,6 @@
     <div class="roll-dc" id="roll-dc-line"></div>
     <div class="dice-display" id="dice-icon" title="Click to roll">🎲</div>
     <div class="roll-result-num hidden" id="roll-result-num"></div>
-    <div class="modal .roll-actions">
-      <input type="number" id="manual-roll" placeholder="Or enter a number…" min="1" max="30">
-      <button class="primary" id="submit-roll-btn">Confirm Roll</button>
-    </div>
   </div>
 </div>
 
@@ -880,7 +876,6 @@ function showRollModal(req, rulesCtx) {
   el('dice-icon').textContent = diceEmoji(req.type);
   el('roll-result-num').classList.add('hidden');
   el('roll-result-num').textContent = '';
-  el('manual-roll').value = '';
   el('roll-modal').classList.remove('hidden');
 }
 
@@ -890,37 +885,32 @@ function diceEmoji(type) {
 }
 
 el('dice-icon').addEventListener('click', () => {
-  if (!pendingRoll) return;
+  if (!pendingRoll || rolledValue != null) return; // ignore clicks after rolling
   const type = pendingRoll.type || 'd20';
   const m = type.match(/^(\d*)d(\d+)([+-]\d+)?$/i);
-  if (m) {
-    const count = parseInt(m[1] || '1');
-    const sides = parseInt(m[2]);
-    const mod = parseInt(m[3] || '0');
-    let total = mod;
-    rawD20 = null;
-    for (let i = 0; i < count; i++) {
-      const face = Math.ceil(Math.random() * sides);
-      total += face;
-      // Track the raw d20 face for nat 1/20 (only meaningful for a single d20)
-      if (count === 1 && sides === 20) rawD20 = face;
-    }
-    rolledValue = total;
-    const label = rawD20 === 20 ? `${total} ✦ CRIT!` : rawD20 === 1 ? `${total} ✗ NAT 1` : total;
-    el('roll-result-num').textContent = label;
-    el('roll-result-num').classList.remove('hidden');
-    el('manual-roll').value = '';
+  if (!m) return;
+  const count = parseInt(m[1] || '1');
+  const sides = parseInt(m[2]);
+  const mod = parseInt(m[3] || '0');
+  let total = mod;
+  rawD20 = null;
+  for (let i = 0; i < count; i++) {
+    const face = Math.ceil(Math.random() * sides);
+    total += face;
+    if (count === 1 && sides === 20) rawD20 = face;
   }
+  rolledValue = total;
+  const label = rawD20 === 20 ? `${total} ✦ CRIT!` : rawD20 === 1 ? `${total} ✗ NAT 1` : String(total);
+  el('roll-result-num').textContent = label;
+  el('roll-result-num').classList.remove('hidden');
+
+  // Auto-submit after 2 seconds
+  setTimeout(submitRoll, 2000);
 });
 
-el('submit-roll-btn').addEventListener('click', async () => {
+async function submitRoll() {
   if (!pendingRoll) return;
-  const manualVal = el('manual-roll').value.trim();
-  const finalRoll = manualVal !== '' ? parseInt(manualVal) : rolledValue;
-  if (finalRoll == null || isNaN(finalRoll)) {
-    el('roll-desc').textContent = 'Click the dice to roll, or enter a number.';
-    return;
-  }
+  const finalRoll = rolledValue;
 
   el('roll-modal').classList.add('hidden');
 
@@ -931,7 +921,7 @@ el('submit-roll-btn').addEventListener('click', async () => {
   try {
     const data = await api('/api/roll-result', 'POST', {
       roll_total: finalRoll,
-      raw_d20: manualVal !== '' ? null : rawD20,
+      raw_d20: rawD20,
       description: pendingRoll.description,
       dc: pendingRoll.dc,
       damage_dice: pendingRoll.damage_dice || null,
