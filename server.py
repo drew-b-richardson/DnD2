@@ -439,9 +439,13 @@ def illustrate():
 
     def _run():
         try:
+            # Build prompt while Ollama is still loaded
             prompt = llm.build_image_prompt(state_snapshot)
             if not prompt:
                 raise RuntimeError("LLM returned an empty image prompt")
+            # Unload Ollama to free unified memory before image generation.
+            # It reloads automatically on the next player action.
+            llm.unload()
             out_path = f"/tmp/dnd_illus_{job_id}.png"
             _img_gen.generate(prompt, out_path)
             with _img_jobs_lock:

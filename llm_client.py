@@ -150,6 +150,18 @@ class OllamaClient:
             print(f"\n  [Unexpected error: {e}]")
         return None
 
+    def unload(self) -> None:
+        """Unload the model from Ollama memory (keep_alive=0)."""
+        try:
+            requests.post(
+                f"{self.base_url}/api/generate",
+                json={"model": self.model, "keep_alive": 0},
+                timeout=10,
+            )
+            print("  [Ollama model unloaded to free memory]")
+        except Exception:
+            pass
+
     def build_image_prompt(self, state: dict) -> str | None:
         """Generate a Stable Diffusion prompt from the current game state.
 
